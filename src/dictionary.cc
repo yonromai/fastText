@@ -130,6 +130,7 @@ void Dictionary::computeNgrams(const std::string& word,
       }
       if (n >= args_->minn) {
         int32_t h = hash(ngram) % args_->bucket;
+        dictCsv.log(ngram, nwords_ + h);
         ngrams.push_back(nwords_ + h);
       }
     }
@@ -137,11 +138,13 @@ void Dictionary::computeNgrams(const std::string& word,
 }
 
 void Dictionary::initNgrams() {
+  dictCsv = DictCsv::DictCsv(args_->output);
   for (size_t i = 0; i < size_; i++) {
     std::string word = BOW + words_[i].word + EOW;
     words_[i].subwords.push_back(i);
     computeNgrams(word, words_[i].subwords);
   }
+  dictCsv.close();
 }
 
 bool Dictionary::readWord(std::istream& in, std::string& word)

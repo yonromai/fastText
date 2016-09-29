@@ -19,6 +19,7 @@
 
 #include "args.h"
 #include "real.h"
+#include "dictcsv.h"
 
 typedef int32_t id_type;
 enum class entry_type : int8_t {word=0, label=1};
@@ -47,6 +48,8 @@ class Dictionary {
     int32_t nwords_;
     int32_t nlabels_;
     int64_t ntokens_;
+
+    DictCsv dictCsv;
 
   public:
     static const std::string EOS;

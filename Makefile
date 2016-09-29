@@ -9,7 +9,7 @@
 
 CXX = c++
 CXXFLAGS = -pthread -std=c++0x
-OBJS = argscsv.o args.o fasttextcsv.o dictionary.o matrix.o vector.o model.o utils.o
+OBJS = argscsv.o args.o fasttextcsv.o dictcsv.o dictionary.o matrix.o vector.o model.o utils.o
 INCLUDES = -I.
 
 opt: CXXFLAGS += -O3 -funroll-loops
@@ -26,6 +26,9 @@ args.o: src/args.cc src/args.h
 
 fasttextcsv.o: src/fasttextcsv.cc src/fasttextcsv.h
 	$(CXX) $(CXXFLAGS) -c src/fasttextcsv.cc
+
+dictcsv.o: src/dictcsv.cc src/dictcsv.h
+	$(CXX) $(CXXFLAGS) -c src/dictcsv.cc
 
 dictionary.o: src/dictionary.cc src/dictionary.h src/args.h
 	$(CXX) $(CXXFLAGS) -c src/dictionary.cc
