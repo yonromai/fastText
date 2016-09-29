@@ -22,6 +22,7 @@ enum class loss_name : int {hs=1, ns, softmax};
 class Args {
   public:
     Args();
+    Csv csv;
     std::string input;
     std::string test;
     std::string output;

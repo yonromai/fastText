@@ -6,7 +6,10 @@
 class Csv {
   public:
     Csv();
-    static std::string help();
+    bool enabled;
+
+    std::string help();
+    bool isCsvArg(char*);
 };
 
 #endif
