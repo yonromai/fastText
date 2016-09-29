@@ -10,6 +10,8 @@
 #ifndef FASTTEXT_ARGS_H
 #define FASTTEXT_ARGS_H
 
+#include "csv.h"
+
 #include <istream>
 #include <ostream>
 #include <string>

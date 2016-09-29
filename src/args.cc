@@ -135,6 +135,7 @@ void Args::printHelp() {
     << "  -input              training file path\n"
     << "  -output             output file path\n\n"
     << "The following arguments are optional:\n"
+    << Csv::help()
     << "  -lr                 learning rate [" << lr << "]\n"
     << "  -lrUpdateRate       change the rate of updates for the learning rate [" << lrUpdateRate << "]\n"
     << "  -dim                size of word vectors [" << dim << "]\n"
