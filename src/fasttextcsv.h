@@ -10,7 +10,7 @@
 
 class FastTextCsv {
   private:
-    static void getTokenVectors(Vector&, const std::string&, std::shared_ptr<Dictionary>, std::shared_ptr<Matrix>);
+    static void getTokenVector(Vector&, std::shared_ptr<Matrix>, int64_t);
 
   public:
     static void saveTokenVectors(int, std::string&, std::shared_ptr<Dictionary> , std::shared_ptr<Matrix>);
