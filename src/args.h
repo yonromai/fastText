@@ -10,7 +10,7 @@
 #ifndef FASTTEXT_ARGS_H
 #define FASTTEXT_ARGS_H
 
-#include "csv.h"
+#include "argscsv.h"
 
 #include <istream>
 #include <ostream>
@@ -22,7 +22,7 @@ enum class loss_name : int {hs=1, ns, softmax};
 class Args {
   public:
     Args();
-    Csv csv;
+    ArgsCsv argsCsv;
     std::string input;
     std::string test;
     std::string output;

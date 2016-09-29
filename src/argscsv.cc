@@ -1,18 +1,17 @@
-#include "csv.h"
+#include "argscsv.h"
 
 #include <string.h>
 
-Csv::Csv() {
+ArgsCsv::ArgsCsv() {
 	bool enabled = false;
 }
 
-
 // Args helpers
 
-std::string Csv::help() {
+std::string ArgsCsv::help() {
 	return "  -csv                parse tokens as csv tuples [0]\n";
 }
 
-bool Csv::isCsvArg(char* arg) {
+bool ArgsCsv::isCsvArg(char* arg) {
 	return strcmp(arg, "-csv") == 0;
 }

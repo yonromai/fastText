@@ -8,6 +8,7 @@
  */
 
 #include "fasttext.h"
+#include "fasttextcsv.h"
 
 #include <fenv.h>
 #include <math.h>
@@ -347,6 +348,9 @@ void FastText::train(std::shared_ptr<Args> args) {
   saveModel();
   if (args_->model != model_name::sup) {
     saveVectors();
+    if (args_->argsCsv.enabled) {
+      FastTextCsv::saveTokenVectors(args_->dim, args_->output, dict_, input_);
+    }
   }
 }
 

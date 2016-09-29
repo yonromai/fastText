@@ -1,11 +1,12 @@
-#ifndef CSV_ARGS_H
-#define CSV_ARGS_H
+#ifndef ARGSCSV_H
+#define ARGSCSV_H
 
 #include <string>
 
-class Csv {
+class ArgsCsv {
+
   public:
-    Csv();
+    ArgsCsv();
     bool enabled;
 
     std::string help();

@@ -15,7 +15,7 @@
 #include <iostream>
 
 Args::Args() {
-  csv = Csv::Csv(); // Use Args to carry the Csv object... Hack :(
+  argsCsv = ArgsCsv::ArgsCsv(); // Use Args to carry the Csv object... Hack :(
   lr = 0.05;
   dim = 100;
   ws = 5;
@@ -59,8 +59,8 @@ void Args::parseArgs(int argc, char** argv) {
       std::cout << "Here is the help! Usage:" << std::endl;
       printHelp();
       exit(EXIT_FAILURE);
-    } else if (csv.isCsvArg(argv[ai])) {
-      csv.enabled = true;
+    } else if (argsCsv.isCsvArg(argv[ai])) {
+      argsCsv.enabled = true;
     } else if (strcmp(argv[ai], "-input") == 0) {
       input = std::string(argv[ai + 1]);
     } else if (strcmp(argv[ai], "-test") == 0) {
@@ -138,7 +138,7 @@ void Args::printHelp() {
     << "  -input              training file path\n"
     << "  -output             output file path\n\n"
     << "The following arguments are optional:\n"
-    << csv.help()
+    << argsCsv.help()
     << "  -lr                 learning rate [" << lr << "]\n"
     << "  -lrUpdateRate       change the rate of updates for the learning rate [" << lrUpdateRate << "]\n"
     << "  -dim                size of word vectors [" << dim << "]\n"
