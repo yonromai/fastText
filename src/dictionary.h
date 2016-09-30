@@ -49,14 +49,13 @@ class Dictionary {
     int32_t nlabels_;
     int64_t ntokens_;
 
-    DictCsv dictCsv;
-
   public:
     static const std::string EOS;
     static const std::string BOW;
     static const std::string EOW;
 
     explicit Dictionary(std::shared_ptr<Args>);
+    DictCsv dictCsv;
     int32_t nwords();
     int32_t nlabels();
     int64_t ntokens();
@@ -67,7 +66,7 @@ class Dictionary {
     const std::vector<int32_t>& getNgrams(int32_t);
     const std::vector<int32_t> getNgrams(const std::string&);
     void computeNgrams(const std::string&, std::vector<int32_t>&);
-    uint32_t hash(const std::string& str);
+    static uint32_t hash(const std::string& str);
     void add(const std::string&);
     bool readWord(std::istream&, std::string&);
     void readFromFile(std::istream&);
