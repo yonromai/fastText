@@ -15,7 +15,7 @@
 #include <iostream>
 
 Args::Args() {
-  argsCsv = ArgsCsv::ArgsCsv(); // Use Args to carry the Csv object... Hack :(
+  argsCsv = ArgsCsv(); // Use Args to carry the Csv object... Hack :(
   lr = 0.05;
   dim = 100;
   ws = 5;
