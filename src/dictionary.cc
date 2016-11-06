@@ -142,6 +142,9 @@ void Dictionary::initNgrams() {
     if (args_->argsCsv.enabled) {
       std::string word = words_[i].word;
       words_[i].subwords.push_back(i);
+      // this is where each word (which includes csv tokens)
+      // gets a vector. maybe we can try not doing this, not
+      // really needed in our case?
       dictCsv.splitByComma(word, words_[i].subwords, hash, nwords_, args_->bucket);
     } else {
       std::string word = BOW + words_[i].word + EOW;

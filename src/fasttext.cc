@@ -86,6 +86,7 @@ void FastText::loadModel(const std::string& filename) {
 void FastText::printInfo(real progress, real loss) {
   real t = real(clock() - start) / CLOCKS_PER_SEC;
   real wst = real(tokenCount) / t;
+  // real lr = 0.04 + args_->lr * (1.0 - progress);
   real lr = args_->lr * (1.0 - progress);
   int eta = int(t / progress * (1 - progress) / args_->thread);
   int etah = eta / 3600;
@@ -96,6 +97,9 @@ void FastText::printInfo(real progress, real loss) {
   std::cout << "  lr: " << std::setprecision(6) << lr;
   std::cout << "  loss: " << std::setprecision(6) << loss;
   std::cout << "  eta: " << etah << "h" << etam << "m ";
+  if (int(t) % 6000 == 0) {
+    std::cout << std::endl;
+  }
   std::cout << std::flush;
 }
 
@@ -121,7 +125,8 @@ void FastText::cbow(Model& model, real lr,
         bow.insert(bow.end(), ngrams.cbegin(), ngrams.cend());
       }
     }
-    model.update(bow, line[w], lr);
+    model.update(bow, line[w], lr); // here we could call update once for each
+                                    // subword of line[w]?
   }
 }
 
@@ -239,6 +244,7 @@ void FastText::trainThread(int32_t threadId) {
   std::vector<int32_t> line, labels;
   while (tokenCount < args_->epoch * ntokens) {
     real progress = real(tokenCount) / (args_->epoch * ntokens);
+    // real lr = 0.04 + args_->lr * (1.0 - progress);
     real lr = args_->lr * (1.0 - progress);
     localTokenCount += dict_->getLine(ifs, line, labels, model.rng);
     if (args_->model == model_name::sup) {
