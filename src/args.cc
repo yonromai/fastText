@@ -34,6 +34,7 @@ Args::Args() {
   label = "__label__";
   verbose = 2;
   pretrainedVectors = "";
+  eval = "false";
 }
 
 void Args::parseArgs(int argc, char** argv) {
@@ -65,6 +66,8 @@ void Args::parseArgs(int argc, char** argv) {
       input = std::string(argv[ai + 1]);
     } else if (strcmp(argv[ai], "-test") == 0) {
       test = std::string(argv[ai + 1]);
+    } else if (strcmp(argv[ai], "-eval") == 0) {
+      eval = std::string(argv[ai + 1]);
     } else if (strcmp(argv[ai], "-output") == 0) {
       output = std::string(argv[ai + 1]);
     } else if (strcmp(argv[ai], "-lr") == 0) {
@@ -156,6 +159,7 @@ void Args::printHelp() {
     << "  -label              labels prefix [" << label << "]\n"
     << "  -verbose            verbosity level [" << verbose << "]\n"
     << "  -pretrainedVectors  pretrained word vectors for supervised learning []"
+    << "  -eval               eval file path\n"
     << std::endl;
 }
 

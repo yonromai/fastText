@@ -32,18 +32,24 @@ class FastText {
     std::shared_ptr<Model> model_;
     std::atomic<int64_t> tokenCount;
     clock_t start;
+    int32_t evalThread;
 
   public:
     void getVector(Vector&, const std::string&);
     void saveVectors();
     void saveModel();
     void loadModel(const std::string&);
-    void printInfo(real, real);
+    void printInfo(real, real, real);
+    void printEvalInfo(real, real);
 
     void supervised(Model&, real, const std::vector<int32_t>&,
                     const std::vector<int32_t>&);
     void cbow(Model&, real, const std::vector<int32_t>&);
+    void cbowWithoutSampling(Model&, real, const std::vector<int32_t>&);
+
     void skipgram(Model&, real, const std::vector<int32_t>&);
+    void skipgramWithoutSampling(Model&, real, const std::vector<int32_t>&);
+    void calculateEvalLoss(Model&);
     void test(std::istream&, int32_t);
     void predict(std::istream&, int32_t, bool);
     void wordVectors();

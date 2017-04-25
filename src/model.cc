@@ -30,6 +30,10 @@ Model::Model(std::shared_ptr<Matrix> wi,
   negpos = 0;
   loss_ = 0.0;
   nexamples_ = 1;
+  batchLoss_ = 0.0;
+  batchSize_ = 1;
+  batchEvalLoss_ = 0.0;
+  batchEvalSize_ = 1;
 }
 
 real Model::binaryLogistic(int32_t target, bool label, real lr) {
@@ -37,6 +41,15 @@ real Model::binaryLogistic(int32_t target, bool label, real lr) {
   real alpha = lr * (real(label) - score);
   grad_.addRow(*wo_, target, alpha);
   wo_->addRow(hidden_, target, alpha);
+  if (label) {
+    return -utils::log(score);
+  } else {
+    return -utils::log(1.0 - score);
+  }
+}
+
+real Model::binaryLogisticOnlyEval(int32_t target, bool label, real lr) {
+  real score = utils::sigmoid(wo_->dotRow(hidden_, target));
   if (label) {
     return -utils::log(score);
   } else {
@@ -57,6 +70,19 @@ real Model::negativeSampling(int32_t target, real lr) {
   return loss;
 }
 
+real Model::negativeSamplingOnlyEval(int32_t target, real lr) {
+  real loss = 0.0;
+  grad_.zero();
+  for (int32_t n = 0; n <= args_->neg; n++) {
+    if (n == 0) {
+      loss += binaryLogisticOnlyEval(target, true, lr);
+    } else {
+      loss += binaryLogisticOnlyEval(getNegative(target), false, lr);
+    }
+  }
+  return loss;
+}
+
 real Model::hierarchicalSoftmax(int32_t target, real lr) {
   real loss = 0.0;
   grad_.zero();
@@ -64,6 +90,17 @@ real Model::hierarchicalSoftmax(int32_t target, real lr) {
   const std::vector<int32_t>& pathToRoot = paths[target];
   for (int32_t i = 0; i < pathToRoot.size(); i++) {
     loss += binaryLogistic(pathToRoot[i], binaryCode[i], lr);
+  }
+  return loss;
+}
+
+real Model::hierarchicalSoftmaxOnlyEval(int32_t target, real lr) {
+  real loss = 0.0;
+  grad_.zero();
+  const std::vector<bool>& binaryCode = codes[target];
+  const std::vector<int32_t>& pathToRoot = paths[target];
+  for (int32_t i = 0; i < pathToRoot.size(); i++) {
+    loss += binaryLogisticOnlyEval(pathToRoot[i], binaryCode[i], lr);
   }
   return loss;
 }
@@ -92,6 +129,12 @@ real Model::softmax(int32_t target, real lr) {
     grad_.addRow(*wo_, i, alpha);
     wo_->addRow(hidden_, i, alpha);
   }
+  return -utils::log(output_[target]);
+}
+
+real Model::softmaxOnlyEval(int32_t target, real lr) {
+  grad_.zero();
+  computeOutputSoftmax();
   return -utils::log(output_[target]);
 }
 
@@ -166,15 +209,22 @@ void Model::update(const std::vector<int32_t>& input, int32_t target, real lr) {
     hidden_.addRow(*wi_, *it);
   }
   hidden_.mul(1.0 / input.size());
-
+  real curr_loss = 0;
   if (args_->loss == loss_name::ns) {
-    loss_ += negativeSampling(target, lr);
+    curr_loss = negativeSampling(target, lr);
+    loss_ += curr_loss;
+    batchLoss_ += curr_loss;
   } else if (args_->loss == loss_name::hs) {
-    loss_ += hierarchicalSoftmax(target, lr);
+    curr_loss = hierarchicalSoftmax(target, lr);
+    loss_ += curr_loss;
+    batchLoss_ += curr_loss;
   } else {
-    loss_ += softmax(target, lr);
+    curr_loss = softmax(target, lr);
+    loss_ += curr_loss;
+    batchLoss_ += curr_loss;
   }
   nexamples_ += 1;
+  batchSize_ += 1;
 
   if (args_->model == model_name::sup) {
     grad_.mul(1.0 / input.size());
@@ -182,6 +232,25 @@ void Model::update(const std::vector<int32_t>& input, int32_t target, real lr) {
   for (auto it = input.cbegin(); it != input.cend(); ++it) {
     wi_->addRow(grad_, *it, 1.0);
   }
+}
+
+void Model::updateOnlyEval(const std::vector<int32_t>& input, int32_t target, real lr) {
+  assert(target >= 0);
+  assert(target < osz_);
+  if (input.size() == 0) return;
+  hidden_.zero();
+  for (auto it = input.cbegin(); it != input.cend(); ++it) {
+    hidden_.addRow(*wi_, *it);
+  }
+  hidden_.mul(1.0 / input.size());
+  if (args_->loss == loss_name::ns) {
+    batchEvalLoss_ += negativeSamplingOnlyEval(target, lr);
+  } else if (args_->loss == loss_name::hs) {
+    batchEvalLoss_ += hierarchicalSoftmaxOnlyEval(target, lr);  // not tested but small change
+  } else {
+    batchEvalLoss_ += softmaxOnlyEval(target, lr);  // not tested
+  }
+  batchEvalSize_ += 1;
 }
 
 void Model::setTargetCounts(const std::vector<int64_t>& counts) {
@@ -263,4 +332,30 @@ void Model::buildTree(const std::vector<int64_t>& counts) {
 
 real Model::getLoss() {
   return loss_ / nexamples_;
+}
+
+real Model::getBatchLoss() {
+  return batchLoss_ / batchSize_;
+}
+
+int32_t Model::getBatchSize() {
+  return batchSize_;
+}
+
+int32_t Model::getEvalBatchSize() {
+  return batchEvalSize_;
+}
+
+void Model::resetBatch() {
+  batchLoss_ = 0.0;
+  batchSize_ = 1;
+}
+
+void Model::resetEvalBatch() {
+  batchEvalLoss_ = 0.0;
+  batchEvalSize_ = 1;
+}
+
+real Model::getEvalLoss() {
+  return batchEvalLoss_ / batchEvalSize_;
 }

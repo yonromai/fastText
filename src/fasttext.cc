@@ -83,10 +83,9 @@ void FastText::loadModel(const std::string& filename) {
   ifs.close();
 }
 
-void FastText::printInfo(real progress, real loss) {
+void FastText::printInfo(real progress, real loss, real batchLoss) {
   real t = real(clock() - start) / CLOCKS_PER_SEC;
   real wst = real(tokenCount) / t;
-  // real lr = 0.04 + args_->lr * (1.0 - progress);
   real lr = args_->lr * (1.0 - progress);
   int eta = int(t / progress * (1 - progress) / args_->thread);
   int etah = eta / 3600;
@@ -96,10 +95,15 @@ void FastText::printInfo(real progress, real loss) {
   std::cout << "  words/sec/thread: " << std::setprecision(0) << wst;
   std::cout << "  lr: " << std::setprecision(6) << lr;
   std::cout << "  loss: " << std::setprecision(6) << loss;
-  std::cout << "  eta: " << etah << "h" << etam << "m ";
-  if (int(t) % 6000 == 0) {
-    std::cout << std::endl;
-  }
+  std::cout << "  Batch Loss: " << std::setprecision(6) << batchLoss;
+  std::cout << "  eta: " << etah << "h" << etam << "m " << std::endl;
+  std::cout << std::flush;
+}
+
+void FastText::printEvalInfo(real progress, real evalLoss) {
+  std::cout << std::fixed;
+  std::cout << "\r=== Progress: " << std::setprecision(1) << 100 * progress << "%";
+  std::cout << "  Eval Loss: " << std::setprecision(6) << evalLoss << std::endl;
   std::cout << std::flush;
 }
 
@@ -130,6 +134,21 @@ void FastText::cbow(Model& model, real lr,
   }
 }
 
+void FastText::cbowWithoutSampling(Model& model, real lr,
+                                   const std::vector<int32_t>& line) {
+  std::vector<int32_t> bow;
+  for (int32_t w = 0; w < line.size(); w++) {
+    bow.clear();
+    for (int32_t c = -args_->ws; c <= args_->ws; c++) {
+      if (c != 0 && w + c >= 0 && w + c < line.size()) {
+        const std::vector<int32_t>& ngrams = dict_->getNgrams(line[w + c]);
+        bow.insert(bow.end(), ngrams.cbegin(), ngrams.cend());
+      }
+    }
+    model.updateOnlyEval(bow, line[w], lr);
+  }
+}
+
 void FastText::skipgram(Model& model, real lr,
                         const std::vector<int32_t>& line) {
   std::uniform_int_distribution<> uniform(1, args_->ws);
@@ -139,6 +158,19 @@ void FastText::skipgram(Model& model, real lr,
     for (int32_t c = -boundary; c <= boundary; c++) {
       if (c != 0 && w + c >= 0 && w + c < line.size()) {
         model.update(ngrams, line[w + c], lr);
+      }
+    }
+  }
+}
+
+void FastText::skipgramWithoutSampling(Model& model, real lr,
+                                       const std::vector<int32_t>& line) {
+  for (int32_t w = 0; w < line.size(); w++) {
+    int32_t boundary = args_->ws;
+    const std::vector<int32_t>& ngrams = dict_->getNgrams(line[w]);
+    for (int32_t c = -boundary; c <= boundary; c++) {
+      if (c != 0 && w + c >= 0 && w + c < line.size()) {
+        model.updateOnlyEval(ngrams, line[w + c], lr);
       }
     }
   }
@@ -229,6 +261,7 @@ void FastText::printVectors() {
 }
 
 void FastText::trainThread(int32_t threadId) {
+  real lastEvalProgress = 0;
   std::ifstream ifs(args_->input);
   utils::seek(ifs, threadId * utils::size(ifs) / args_->thread);
 
@@ -244,7 +277,6 @@ void FastText::trainThread(int32_t threadId) {
   std::vector<int32_t> line, labels;
   while (tokenCount < args_->epoch * ntokens) {
     real progress = real(tokenCount) / (args_->epoch * ntokens);
-    // real lr = 0.04 + args_->lr * (1.0 - progress);
     real lr = args_->lr * (1.0 - progress);
     localTokenCount += dict_->getLine(ifs, line, labels, model.rng);
     if (args_->model == model_name::sup) {
@@ -258,16 +290,46 @@ void FastText::trainThread(int32_t threadId) {
     if (localTokenCount > args_->lrUpdateRate) {
       tokenCount += localTokenCount;
       localTokenCount = 0;
-      if (threadId == 0 && args_->verbose > 1) {
-        printInfo(progress, model.getLoss());
+    }
+    if (args_->verbose > 1 && model.getBatchSize() > 100000 && threadId == (evalThread + 1) % args_->thread) {
+      printInfo(progress, model.getLoss(), model.getBatchLoss());
+      model.resetBatch();
+    }
+    if (args_->verbose > 1 && evalThread == threadId) {
+      // print progress after every percentage of progress
+      if (args_->eval != "false" && (progress - lastEvalProgress) >= 1.0) {
+        lastEvalProgress = progress;
+        calculateEvalLoss(model);
+        printEvalInfo(progress, model.getEvalLoss());
+        model.resetEvalBatch();
+        evalThread = (evalThread + 1) % args_->thread;
       }
     }
   }
   if (threadId == 0) {
-    printInfo(1.0, model.getLoss());
+    if (args_->eval != "false") {
+      calculateEvalLoss(model);
+      printEvalInfo(1.0, model.getEvalLoss());
+    }
+    printInfo(1.0, model.getLoss(), model.getBatchLoss());
     std::cout << std::endl;
   }
   ifs.close();
+}
+
+void FastText::calculateEvalLoss(Model& model) {
+  std::vector<int32_t> line;
+  std::ifstream ifs(args_->eval);
+  // eval loss does not work for supervised case
+  while (!ifs.eof()) {
+     dict_->getLineWithoutSampling(ifs, line);
+     if (args_->model == model_name::cbow) {
+        cbowWithoutSampling(model, 1.0, line);  // passing dummy lr = 1.0
+                                                // cos its easier than changing all the signatures
+      } else if (args_->model == model_name::sg) {
+        skipgramWithoutSampling(model, 1.0, line);
+      }
+  }
 }
 
 void FastText::loadVectors(std::string filename) {
@@ -343,6 +405,8 @@ void FastText::train(std::shared_ptr<Args> args) {
   start = clock();
   tokenCount = 0;
   std::vector<std::thread> threads;
+
+  evalThread = 0;
   for (int32_t i = 0; i < args_->thread; i++) {
     threads.push_back(std::thread([=]() { trainThread(i); }));
   }

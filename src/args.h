@@ -24,6 +24,7 @@ class Args {
     Args();
     ArgsCsv argsCsv;
     std::string input;
+    std::string eval;
     std::string test;
     std::string output;
     double lr;

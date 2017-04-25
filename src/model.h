@@ -40,6 +40,10 @@ class Model {
     int32_t isz_;
     int32_t osz_;
     real loss_;
+    real batchLoss_;
+    real batchEvalLoss_;
+    int32_t batchEvalSize_;
+    int32_t batchSize_;
     int64_t nexamples_;
 
     static bool comparePairs(const std::pair<real, int32_t>&,
@@ -58,15 +62,20 @@ class Model {
           std::shared_ptr<Args>, int32_t);
 
     real binaryLogistic(int32_t, bool, real);
+    real binaryLogisticOnlyEval(int32_t, bool, real);
     real negativeSampling(int32_t, real);
+    real negativeSamplingOnlyEval(int32_t, real);
     real hierarchicalSoftmax(int32_t, real);
+    real hierarchicalSoftmaxOnlyEval(int32_t, real);
     real softmax(int32_t, real);
+    real softmaxOnlyEval(int32_t, real);
 
     void predict(const std::vector<int32_t>&, int32_t,
                  std::vector<std::pair<real, int32_t>>&);
     void dfs(int32_t, int32_t, real, std::vector<std::pair<real, int32_t>>&);
     void findKBest(int32_t, std::vector<std::pair<real, int32_t>>&);
     void update(const std::vector<int32_t>&, int32_t, real);
+    void updateOnlyEval(const std::vector<int32_t>&, int32_t, real);
     void computeHidden(const std::vector<int32_t>&);
     void computeOutputSoftmax();
 
@@ -75,6 +84,12 @@ class Model {
     int32_t getNegative(int32_t target);
     void buildTree(const std::vector<int64_t>&);
     real getLoss();
+    real getBatchLoss();
+    int32_t getBatchSize();
+    int32_t getEvalBatchSize();
+    void resetBatch();
+    real getEvalLoss();
+    void resetEvalBatch();
 
     std::minstd_rand rng;
 };
