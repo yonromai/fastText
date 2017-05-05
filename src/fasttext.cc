@@ -83,28 +83,28 @@ void FastText::loadModel(const std::string& filename) {
   ifs.close();
 }
 
-void FastText::printInfo(real progress, real loss, real batchLoss) {
+void FastText::printInfo(std::ostream& stream, real progress, real loss, real batchLoss) {
   real t = real(clock() - start) / CLOCKS_PER_SEC;
   real wst = real(tokenCount) / t;
   real lr = args_->lr * (1.0 - progress);
   int eta = int(t / progress * (1 - progress) / args_->thread);
   int etah = eta / 3600;
   int etam = (eta - etah * 3600) / 60;
-  std::cout << std::fixed;
-  std::cout << "\rProgress: " << std::setprecision(1) << 100 * progress << "%";
-  std::cout << "  words/sec/thread: " << std::setprecision(0) << wst;
-  std::cout << "  lr: " << std::setprecision(6) << lr;
-  std::cout << "  loss: " << std::setprecision(6) << loss;
-  std::cout << "  Batch Loss: " << std::setprecision(6) << batchLoss;
-  std::cout << "  eta: " << etah << "h" << etam << "m " << std::endl;
-  std::cout << std::flush;
+  stream << std::fixed;
+  stream << "\rProgress: " << std::setprecision(1) << 100 * progress << "%";
+  stream << "  words/sec/thread: " << std::setprecision(0) << wst;
+  stream << "  lr: " << std::setprecision(6) << lr;
+  stream << "  loss: " << std::setprecision(6) << loss;
+  stream << "  Batch Loss: " << std::setprecision(6) << batchLoss;
+  stream << "  eta: " << etah << "h" << etam << "m " << std::endl;
+  stream << std::flush;
 }
 
-void FastText::printEvalInfo(real progress, real evalLoss) {
-  std::cout << std::fixed;
-  std::cout << "\r=== Progress: " << std::setprecision(1) << 100 * progress << "%";
-  std::cout << "  Eval Loss: " << std::setprecision(6) << evalLoss << std::endl;
-  std::cout << std::flush;
+void FastText::printEvalInfo(std::ostream& stream, real progress, real evalLoss) {
+  stream << std::fixed;
+  stream << "\r=== Progress: " << std::setprecision(1) << 100 * progress << "%";
+  stream << "  Eval Loss: " << std::setprecision(6) << evalLoss << std::endl;
+  stream << std::flush;
 }
 
 void FastText::supervised(Model& model, real lr,
@@ -292,15 +292,17 @@ void FastText::trainThread(int32_t threadId) {
       localTokenCount = 0;
     }
     if (args_->verbose > 1 && model.getBatchSize() > 100000 && threadId == (evalThread + 1) % args_->thread) {
-      printInfo(progress, model.getLoss(), model.getBatchLoss());
+      printInfo(std::cout, progress, model.getLoss(), model.getBatchLoss());
+      printInfo(outputLogStream, progress, model.getLoss(), model.getBatchLoss());
       model.resetBatch();
     }
     if (args_->verbose > 1 && evalThread == threadId) {
       // print progress after every percentage of progress
-      if (args_->eval != "false" && (progress - lastEvalProgress) >= 1.0) {
+      if (args_->eval != "false" && (progress - lastEvalProgress) >= 0.01) {
         lastEvalProgress = progress;
         calculateEvalLoss(model);
-        printEvalInfo(progress, model.getEvalLoss());
+        printEvalInfo(std::cout, progress, model.getEvalLoss());
+        printEvalInfo(outputLogStream, progress, model.getEvalLoss());
         model.resetEvalBatch();
         evalThread = (evalThread + 1) % args_->thread;
       }
@@ -309,10 +311,11 @@ void FastText::trainThread(int32_t threadId) {
   if (threadId == 0) {
     if (args_->eval != "false") {
       calculateEvalLoss(model);
-      printEvalInfo(1.0, model.getEvalLoss());
+      printEvalInfo(std::cout, 1.0, model.getEvalLoss());
+      printEvalInfo(outputLogStream, 1.0, model.getEvalLoss());
     }
-    printInfo(1.0, model.getLoss(), model.getBatchLoss());
-    std::cout << std::endl;
+    printInfo(std::cout, 1.0, model.getLoss(), model.getBatchLoss());
+    printInfo(outputLogStream, 1.0, model.getLoss(), model.getBatchLoss());
   }
   ifs.close();
 }
@@ -380,7 +383,16 @@ void FastText::train(std::shared_ptr<Args> args) {
     std::cerr << "Cannot use stdin for training!" << std::endl;
     exit(EXIT_FAILURE);
   }
+  outputLogStream.open(args_->output + ".log");
+  if (!outputLogStream.is_open()) {
+      std::cout << "Error opening file for writing loss logs." << std::endl;
+      exit(EXIT_FAILURE);
+  }
   std::ifstream ifs(args_->input);
+  if (!ifs.is_open()) {
+      std::cerr << "Input file cannot be opened!" << std::endl;
+      exit(EXIT_FAILURE);
+  }
   if (!ifs.is_open()) {
     std::cerr << "Input file cannot be opened!" << std::endl;
     exit(EXIT_FAILURE);
@@ -422,6 +434,7 @@ void FastText::train(std::shared_ptr<Args> args) {
       FastTextCsv::saveTokenVectors(args_->dim, args_->output, dict_, input_);
     }
   }
+  outputLogStream.close();
 }
 
 void printUsage() {

@@ -8,3 +8,4 @@ result
 .idea
 scripts
 *.csv
+*.log
