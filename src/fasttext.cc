@@ -83,20 +83,28 @@ void FastText::loadModel(const std::string& filename) {
   ifs.close();
 }
 
-void FastText::printInfo(real progress, real loss) {
+void FastText::printInfo(std::ostream& stream, real progress, real loss, real batchLoss) {
   real t = real(clock() - start) / CLOCKS_PER_SEC;
   real wst = real(tokenCount) / t;
   real lr = args_->lr * (1.0 - progress);
   int eta = int(t / progress * (1 - progress) / args_->thread);
   int etah = eta / 3600;
   int etam = (eta - etah * 3600) / 60;
-  std::cout << std::fixed;
-  std::cout << "\rProgress: " << std::setprecision(1) << 100 * progress << "%";
-  std::cout << "  words/sec/thread: " << std::setprecision(0) << wst;
-  std::cout << "  lr: " << std::setprecision(6) << lr;
-  std::cout << "  loss: " << std::setprecision(6) << loss;
-  std::cout << "  eta: " << etah << "h" << etam << "m ";
-  std::cout << std::flush;
+  stream << std::fixed;
+  stream << "\rProgress: " << std::setprecision(1) << 100 * progress << "%";
+  stream << "  words/sec/thread: " << std::setprecision(0) << wst;
+  stream << "  lr: " << std::setprecision(6) << lr;
+  stream << "  loss: " << std::setprecision(6) << loss;
+  stream << "  Batch Loss: " << std::setprecision(6) << batchLoss;
+  stream << "  eta: " << etah << "h" << etam << "m " << std::endl;
+  stream << std::flush;
+}
+
+void FastText::printEvalInfo(std::ostream& stream, real progress, real evalLoss) {
+  stream << std::fixed;
+  stream << "\r=== Progress: " << std::setprecision(1) << 100 * progress << "%";
+  stream << "  Eval Loss: " << std::setprecision(6) << evalLoss << std::endl;
+  stream << std::flush;
 }
 
 void FastText::supervised(Model& model, real lr,
@@ -121,7 +129,23 @@ void FastText::cbow(Model& model, real lr,
         bow.insert(bow.end(), ngrams.cbegin(), ngrams.cend());
       }
     }
-    model.update(bow, line[w], lr);
+    model.update(bow, line[w], lr); // here we could call update once for each
+                                    // subword of line[w]?
+  }
+}
+
+void FastText::cbowWithoutSampling(Model& model, real lr,
+                                   const std::vector<int32_t>& line) {
+  std::vector<int32_t> bow;
+  for (int32_t w = 0; w < line.size(); w++) {
+    bow.clear();
+    for (int32_t c = -args_->ws; c <= args_->ws; c++) {
+      if (c != 0 && w + c >= 0 && w + c < line.size()) {
+        const std::vector<int32_t>& ngrams = dict_->getNgrams(line[w + c]);
+        bow.insert(bow.end(), ngrams.cbegin(), ngrams.cend());
+      }
+    }
+    model.updateOnlyEval(bow, line[w], lr);
   }
 }
 
@@ -134,6 +158,19 @@ void FastText::skipgram(Model& model, real lr,
     for (int32_t c = -boundary; c <= boundary; c++) {
       if (c != 0 && w + c >= 0 && w + c < line.size()) {
         model.update(ngrams, line[w + c], lr);
+      }
+    }
+  }
+}
+
+void FastText::skipgramWithoutSampling(Model& model, real lr,
+                                       const std::vector<int32_t>& line) {
+  for (int32_t w = 0; w < line.size(); w++) {
+    int32_t boundary = args_->ws;
+    const std::vector<int32_t>& ngrams = dict_->getNgrams(line[w]);
+    for (int32_t c = -boundary; c <= boundary; c++) {
+      if (c != 0 && w + c >= 0 && w + c < line.size()) {
+        model.updateOnlyEval(ngrams, line[w + c], lr);
       }
     }
   }
@@ -224,6 +261,7 @@ void FastText::printVectors() {
 }
 
 void FastText::trainThread(int32_t threadId) {
+  real lastEvalProgress = 0;
   std::ifstream ifs(args_->input);
   utils::seek(ifs, threadId * utils::size(ifs) / args_->thread);
 
@@ -252,16 +290,49 @@ void FastText::trainThread(int32_t threadId) {
     if (localTokenCount > args_->lrUpdateRate) {
       tokenCount += localTokenCount;
       localTokenCount = 0;
-      if (threadId == 0 && args_->verbose > 1) {
-        printInfo(progress, model.getLoss());
+    }
+    if (args_->verbose > 1 && model.getBatchSize() > 100000 && threadId == (evalThread + 1) % args_->thread) {
+      printInfo(std::cout, progress, model.getLoss(), model.getBatchLoss());
+      printInfo(outputLogStream, progress, model.getLoss(), model.getBatchLoss());
+      model.resetBatch();
+    }
+    if (args_->verbose > 1 && evalThread == threadId) {
+      // print progress after every percentage of progress
+      if (args_->eval != "false" && (progress - lastEvalProgress) >= 0.01) {
+        lastEvalProgress = progress;
+        calculateEvalLoss(model);
+        printEvalInfo(std::cout, progress, model.getEvalLoss());
+        printEvalInfo(outputLogStream, progress, model.getEvalLoss());
+        model.resetEvalBatch();
+        evalThread = (evalThread + 1) % args_->thread;
       }
     }
   }
   if (threadId == 0) {
-    printInfo(1.0, model.getLoss());
-    std::cout << std::endl;
+    if (args_->eval != "false") {
+      calculateEvalLoss(model);
+      printEvalInfo(std::cout, 1.0, model.getEvalLoss());
+      printEvalInfo(outputLogStream, 1.0, model.getEvalLoss());
+    }
+    printInfo(std::cout, 1.0, model.getLoss(), model.getBatchLoss());
+    printInfo(outputLogStream, 1.0, model.getLoss(), model.getBatchLoss());
   }
   ifs.close();
+}
+
+void FastText::calculateEvalLoss(Model& model) {
+  std::vector<int32_t> line;
+  std::ifstream ifs(args_->eval);
+  // eval loss does not work for supervised case
+  while (!ifs.eof()) {
+     dict_->getLineWithoutSampling(ifs, line);
+     if (args_->model == model_name::cbow) {
+        cbowWithoutSampling(model, 1.0, line);  // passing dummy lr = 1.0
+                                                // cos its easier than changing all the signatures
+      } else if (args_->model == model_name::sg) {
+        skipgramWithoutSampling(model, 1.0, line);
+      }
+  }
 }
 
 void FastText::loadVectors(std::string filename) {
@@ -312,7 +383,16 @@ void FastText::train(std::shared_ptr<Args> args) {
     std::cerr << "Cannot use stdin for training!" << std::endl;
     exit(EXIT_FAILURE);
   }
+  outputLogStream.open(args_->output + ".log");
+  if (!outputLogStream.is_open()) {
+      std::cout << "Error opening file for writing loss logs." << std::endl;
+      exit(EXIT_FAILURE);
+  }
   std::ifstream ifs(args_->input);
+  if (!ifs.is_open()) {
+      std::cerr << "Input file cannot be opened!" << std::endl;
+      exit(EXIT_FAILURE);
+  }
   if (!ifs.is_open()) {
     std::cerr << "Input file cannot be opened!" << std::endl;
     exit(EXIT_FAILURE);
@@ -337,6 +417,8 @@ void FastText::train(std::shared_ptr<Args> args) {
   start = clock();
   tokenCount = 0;
   std::vector<std::thread> threads;
+
+  evalThread = 0;
   for (int32_t i = 0; i < args_->thread; i++) {
     threads.push_back(std::thread([=]() { trainThread(i); }));
   }
@@ -352,6 +434,7 @@ void FastText::train(std::shared_ptr<Args> args) {
       FastTextCsv::saveTokenVectors(args_->dim, args_->output, dict_, input_);
     }
   }
+  outputLogStream.close();
 }
 
 void printUsage() {

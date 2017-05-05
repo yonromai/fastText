@@ -5,3 +5,7 @@
 data
 fasttext
 result
+.idea
+scripts
+*.csv
+*.log

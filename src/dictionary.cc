@@ -142,6 +142,9 @@ void Dictionary::initNgrams() {
     if (args_->argsCsv.enabled) {
       std::string word = words_[i].word;
       words_[i].subwords.push_back(i);
+      // this is where each word (which includes csv tokens)
+      // gets a vector. maybe we can try not doing this, not
+      // really needed in our case?
       dictCsv.splitByComma(word, words_[i].subwords, hash, nwords_, args_->bucket);
     } else {
       std::string word = BOW + words_[i].word + EOW;
@@ -275,6 +278,26 @@ int32_t Dictionary::getLine(std::istream& in,
     }
     if (type == entry_type::label) {
       labels.push_back(wid - nwords_);
+    }
+    if (words.size() > MAX_LINE_SIZE && args_->model != model_name::sup) break;
+  }
+  return ntokens;
+}
+
+int32_t Dictionary::getLineWithoutSampling(std::istream& in,
+                            std::vector<int32_t>& words) {
+  std::uniform_real_distribution<> uniform(0, 1);
+  std::string token;
+  int32_t ntokens = 0;
+  words.clear();
+  while (readWord(in, token)) {
+    if (token == EOS) break;
+    int32_t wid = getId(token);
+    if (wid < 0) continue;
+    entry_type type = getType(wid);
+    ntokens++;
+    if (type == entry_type::word) {
+      words.push_back(wid);
     }
     if (words.size() > MAX_LINE_SIZE && args_->model != model_name::sup) break;
   }
